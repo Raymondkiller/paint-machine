@@ -1,0 +1,268 @@
+<!DOCTYPE html>
+<html>
+    <meta charset="utf-8" />
+
+    <title>WebSocket Test</title>
+
+    <script type="text/javascript">
+    alert("Click Connect on the right to start!")
+    var canvas, canvasimg, backgroundImage, finalImg;
+    var mouseClicked = false;
+    var prevX = 0;
+    var currX = 0;
+    var prevY = 0;
+    var currY = 0; 
+    var sentX = 0;
+    var sentY = 0;
+    var fillStyle = "black";
+    var globalCompositeOperation = "source-over";
+    var lineWidth = 2;
+
+    function init() {
+      var imageSrc = '/abstract-geometric-pattern_23-2147508597.jpg'
+      backgroundImage = new Image();
+      backgroundImage.src = imageSrc;
+      canvas = document.getElementById('can');
+      finalImg = document.getElementById('finalImg');
+      canvasimg = document.getElementById('canvasimg');
+      canvas.style.backgroundImage = "url('" + imageSrc + "')";
+      canvas.addEventListener("mousemove", handleMouseEvent);
+      canvas.addEventListener("mousedown", handleMouseEvent);
+      canvas.addEventListener("mouseup", handleMouseEvent);
+      canvas.addEventListener("mouseout", handleMouseEvent);
+
+      //websocket
+      document.myform.url.value = "ws://localhost:8000/"
+      document.myform.inputtext.value = "Hello World!"
+      document.myform.disconnectButton.disabled = true;
+
+    }
+
+    function getColor(btn) {
+      globalCompositeOperation = 'source-over';
+      lineWidth = 2;
+      switch (btn.getAttribute('data-color')) {
+        case "green":
+        fillStyle = "green";
+        break;
+        case "blue":
+        fillStyle = "blue";
+        break;
+        case "red":
+        fillStyle = "red";
+        break;
+        case "yellow":
+        fillStyle = "yellow";
+        break;
+        case "orange":
+        fillStyle = "orange";
+        break;
+        case "black":
+        fillStyle = "black";
+        break;
+        case "eraser":
+        globalCompositeOperation = 'destination-out';
+        fillStyle = "rgba(0,0,0,1)";
+        lineWidth = 14;
+        break;
+      }
+
+    }
+
+    function draw(dot) {
+      var ctx = canvas.getContext("2d");
+      ctx.beginPath();
+      ctx.globalCompositeOperation = globalCompositeOperation;
+      if(dot){
+        ctx.fillStyle = fillStyle;
+        ctx.fillRect(currX, currY, 2, 2);
+      } else {
+        ctx.beginPath();
+        ctx.moveTo(prevX, prevY);
+        ctx.lineTo(currX, currY);
+        ctx.strokeStyle = fillStyle;
+        ctx.lineWidth = lineWidth;
+        ctx.stroke();
+      }
+      ctx.closePath();
+    }
+
+    function erase() {
+      if (confirm("Want to clear")) {
+        var ctx = canvas.getContext("2d");
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
+        document.getElementById("canvasimg").style.display = "none";
+      }
+    }
+
+    function save() {
+      canvas.style.border = "2px solid";
+      canvasimg.width = canvas.width;
+      canvasimg.height = canvas.height;
+      var ctx2 = canvasimg.getContext("2d");
+      // comment next line to save the draw only
+      ctx2.drawImage(backgroundImage, 0, 0);
+      ctx2.drawImage(canvas, 0, 0);
+      finalImg.src = canvasimg.toDataURL();
+      finalImg.style.display = "inline";
+    }
+
+    function handleMouseEvent(e) {
+      if (e.type === 'mousedown') {
+        prevX = currX;
+        prevY = currY;
+        currX = e.offsetX;
+        currY = e.offsetY;
+        mouseClicked = true;
+        draw(true);
+        //sent to sever
+        sentX = Math.floor(currX*15/40);
+        sentX = Math.abs(sentX);
+        sentY = Math.floor(currY*15/40);
+        sentY = Math.abs(sentY);
+        doSend("G90 G0 X" + sentX + " Y" + sentY);
+        doSend("G91 G0 Z-7");
+      }
+      if (e.type === 'mouseup') {
+        mouseClicked = false;
+        //sent to sever
+        doSend("G91 G0 Z7");
+      }
+      if (e.type === "mouseout") {
+        mouseClicked = false;
+        // //sent to sever
+        // doSend("UP");
+      }
+      if (e.type === 'mousemove') {
+        if (mouseClicked) {
+          prevX = currX;
+          prevY = currY;
+          currX = e.offsetX;
+          currY = e.offsetY;
+          draw();
+          //sent to sever
+          sentX = Math.floor(currX*15/40);
+          sentX = Math.abs(sentX);
+          sentY = Math.floor(currY*15/40);
+          sentY = Math.abs(sentY);
+          doSend("G90 G0 X" + sentX + " Y" + sentY);
+        }
+      }
+    }
+
+// //websocket
+    // function init()
+    // {
+    //   document.myform.url.value = "ws://localhost:8000/"
+    //   document.myform.inputtext.value = "Hello World!"
+    //   document.myform.disconnectButton.disabled = true;
+    // }
+
+    function doConnect()
+    {
+      websocket = new WebSocket(document.myform.url.value);
+      websocket.onopen = function(evt) { onOpen(evt) };
+      websocket.onclose = function(evt) { onClose(evt) };
+      websocket.onmessage = function(evt) { onMessage(evt) };
+      websocket.onerror = function(evt) { onError(evt) };
+    }
+
+    function onOpen(evt)
+    {
+      writeToScreen("connected\n");
+      document.myform.connectButton.disabled = true;
+      document.myform.disconnectButton.disabled = false;
+    }
+
+    function onClose(evt)
+    {
+      writeToScreen("disconnected\n");
+      document.myform.connectButton.disabled = false;
+      document.myform.disconnectButton.disabled = true;
+    }
+
+    function onMessage(evt)
+    {
+      writeToScreen("response: " + evt.data + '\n');
+    }
+
+    function onError(evt)
+    {
+      writeToScreen('error: ' + evt.data + '\n');
+      websocket.close();
+      document.myform.connectButton.disabled = false;
+      document.myform.disconnectButton.disabled = true;
+    }
+
+    function doSend(message)
+    {
+      writeToScreen("sent: " + message + '\n'); 
+      websocket.send(message);
+    }
+
+    function writeToScreen(message)
+    {
+      document.myform.outputtext.value += message
+      document.myform.outputtext.scrollTop = document.myform.outputtext.scrollHeight;
+    }
+
+    window.addEventListener("load", init, false);
+
+    function sendText() {
+      doSend( document.myform.inputtext.value );
+    }
+
+    function clearText() {
+      document.myform.outputtext.value = "";
+    }
+
+    function doDisconnect() {
+      websocket.close();
+    }
+
+
+
+    </script>
+    <p>
+    <body onload="init()">
+      <canvas id="can" width="400" height="400" style="position:absolute;top:10%;left:10%;border:2px solid;">
+      </canvas>
+      <div style="position:absolute;top:12%;left:42%;">Choose Color</div>
+      <!-- <div style="position:absolute;top:15%;left:45%;width:10px;height:10px;background:green;" data-color="green" onclick="getColor(this)"></div>
+      <div style="position:absolute;top:15%;left:46%;width:10px;height:10px;background:blue;" data-color="blue" onclick="getColor(this)"></div>
+      <div style="position:absolute;top:15%;left:47%;width:10px;height:10px;background:red;" data-color="red" onclick="getColor(this)"></div>
+      <div style="position:absolute;top:17%;left:45%;width:10px;height:10px;background:yellow;" data-color="yellow" onclick="getColor(this)"></div>
+      <div style="position:absolute;top:17%;left:46%;width:10px;height:10px;background:orange;" data-color="orange" onclick="getColor(this)"></div> -->
+      <div style="position:absolute;top:17%;left:42%;width:30px;height:30px;background:black;" data-color="black" onclick="getColor(this)"></div>
+      <!-- <div style="position:absolute;top:25%;left:42%;">Eraser</div>
+      <div style="position:absolute;top:30%;left:42%;width:30px;height:30px;background:white;border:2px solid;" data-color="eraser" onclick="getColor(this)"></div> -->
+      <canvas id="canvasimg" style="display:none;" ></canvas>
+      <img id="finalImg" style="position:absolute;top:10%;left:52%;display:none;" >
+      <input type="button" value="save" id="btn" size="30" onclick="save()" style="position:absolute;top:75%;left:10%;">
+      <input type="button" value="clear" id="clr" size="23" onclick="erase()" style="position:absolute;top:75%;left:20%;">
+    </body>
+    </p>
+
+    <!-- websocket -->
+    <div id="output"></div>
+
+    <form name="myform">
+    <p>
+      <textarea name="outputtext" rows="20" cols="50" style="position:absolute;top:10%;left:50%;"></textarea>
+    </p>
+    <p>
+      <textarea name="inputtext" cols="50" style="position:absolute;top:60%;left:50%;"></textarea>
+    </p>
+    <p>
+      <textarea name="url" cols="50" style="position:absolute;top:67%;left:50%;"></textarea>
+    </p>
+    <p>
+      <input type="button" name=sendButton value="Send" onClick="sendText();" style="position:absolute;top:75%;left:50%;">
+      <input type="button" name=clearButton value="Clear" onClick="clearText();" style="position:absolute;top:75%;left:55%;">
+      <input type="button" name=disconnectButton value="Disconnect" onClick="doDisconnect();" style="position:absolute;top:75%;left:60%;">
+      <input type="button" name=connectButton value="Connect" onClick="doConnect();" style="position:absolute;top:75%;left:68%;">
+    </p>   
+    </form>
+
+
+    </html>
